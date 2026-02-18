@@ -1,4 +1,3 @@
-import postgres from 'postgres';
 import {
   CustomerField,
   CustomersTableType,
@@ -8,8 +7,9 @@ import {
   Revenue,
 } from './definitions';
 import { formatCurrency } from './utils';
+import { neon } from '@neondatabase/serverless';
 
-const sql = postgres(process.env.POSTGRES_URL!, { ssl: 'require' });
+const sql = neon(process.env.DATABASE_URL ?? '');
 
 export async function fetchRevenue() {
   try {
@@ -19,27 +19,27 @@ export async function fetchRevenue() {
     // console.log('Fetching revenue data...');
     // await new Promise((resolve) => setTimeout(resolve, 3000));
 
-    const data = await sql<Revenue[]>`SELECT * FROM revenue`;
+    const data = await sql`SELECT * FROM revenue`;
 
     // console.log('Data fetch completed after 3 seconds.');
 
-    return data;
+    return data as Revenue[];
   } catch (error) {
     console.error('Database Error:', error);
-    throw new Error('Failed to fetch revenue data.');
+    throw new Error(`Failed to fetch revenue data: ${JSON.stringify(error)}`);
   }
 }
 
 export async function fetchLatestInvoices() {
   try {
-    const data = await sql<LatestInvoiceRaw[]>`
+    const data = await sql`
       SELECT invoices.amount, customers.name, customers.image_url, customers.email, invoices.id
       FROM invoices
       JOIN customers ON invoices.customer_id = customers.id
       ORDER BY invoices.date DESC
       LIMIT 5`;
 
-    const latestInvoices = data.map((invoice) => ({
+    const latestInvoices = (data as LatestInvoiceRaw[]).map((invoice) => ({
       ...invoice,
       amount: formatCurrency(invoice.amount),
     }));
@@ -93,7 +93,7 @@ export async function fetchFilteredInvoices(
   const offset = (currentPage - 1) * ITEMS_PER_PAGE;
 
   try {
-    const invoices = await sql<InvoicesTable[]>`
+    const invoices = await sql`
       SELECT
         invoices.id,
         invoices.amount,
@@ -114,7 +114,7 @@ export async function fetchFilteredInvoices(
       LIMIT ${ITEMS_PER_PAGE} OFFSET ${offset}
     `;
 
-    return invoices;
+    return invoices as InvoicesTable[];
   } catch (error) {
     console.error('Database Error:', error);
     throw new Error('Failed to fetch invoices.');
@@ -144,7 +144,7 @@ export async function fetchInvoicesPages(query: string) {
 
 export async function fetchInvoiceById(id: string) {
   try {
-    const data = await sql<InvoiceForm[]>`
+    const data = await sql`
       SELECT
         invoices.id,
         invoices.customer_id,
@@ -154,7 +154,7 @@ export async function fetchInvoiceById(id: string) {
       WHERE invoices.id = ${id};
     `;
 
-    const invoice = data.map((invoice) => ({
+    const invoice = (data as InvoiceForm[]).map((invoice) => ({
       ...invoice,
       // Convert amount from cents to dollars
       amount: invoice.amount / 100,
@@ -169,7 +169,7 @@ export async function fetchInvoiceById(id: string) {
 
 export async function fetchCustomers() {
   try {
-    const customers = await sql<CustomerField[]>`
+    const customers = await sql`
       SELECT
         id,
         name
@@ -177,7 +177,7 @@ export async function fetchCustomers() {
       ORDER BY name ASC
     `;
 
-    return customers;
+    return customers as CustomerField[];
   } catch (err) {
     console.error('Database Error:', err);
     throw new Error('Failed to fetch all customers.');
@@ -186,7 +186,7 @@ export async function fetchCustomers() {
 
 export async function fetchFilteredCustomers(query: string) {
   try {
-    const data = await sql<CustomersTableType[]>`
+    const data = await sql`
 		SELECT
 		  customers.id,
 		  customers.name,
@@ -204,7 +204,7 @@ export async function fetchFilteredCustomers(query: string) {
 		ORDER BY customers.name ASC
 	  `;
 
-    const customers = data.map((customer) => ({
+    const customers = (data as CustomersTableType[]).map((customer) => ({
       ...customer,
       total_pending: formatCurrency(customer.total_pending),
       total_paid: formatCurrency(customer.total_paid),
